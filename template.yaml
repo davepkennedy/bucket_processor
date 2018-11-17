@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+    bucket-processor
+
+    Sample SAM Template for bucket-processor
+    
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+    Function:
+        Timeout: 3
+
+#Parameters:
+#    BucketNameParameter:
+#        Type: String
+
+Resources:
+    SourceBucket:
+        Type: 'AWS::S3::Bucket'
+    DestBucket:
+        Type: 'AWS::S3::Bucket'
+
+    BucketChangedFunction:
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Properties:
+            CodeUri: bucket_changed/build/
+            Handler: app.lambda_handler
+            Runtime: python3.6
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    PARAM1: VALUE
+                    DestBucket: !Ref DestBucket
+            Events:
+                ObjectCreated:
+                    Type: S3
+                    Properties:
+                        Bucket: !Ref SourceBucket
+                        Events: s3:ObjectCreated:*
+
+            Policies:
+                -   AWSLambdaExecute
+                -   Version: "2012-10-17"
+                    Statement:
+                    -   Effect: Allow
+                        Resource: !GetAtt DataTable.Arn
+                        Action:
+                            - dynamodb:PutItem
+                            - dynamodb:UpdateItem
+
+    DataTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+            TableName: bucket_updates
+            AttributeDefinitions:
+                -
+                    AttributeName: event_id
+                    AttributeType: S
+            KeySchema:
+                -
+                    AttributeName: event_id
+                    KeyType: HASH
+            ProvisionedThroughput: 
+                ReadCapacityUnits: 5
+                WriteCapacityUnits: 5
